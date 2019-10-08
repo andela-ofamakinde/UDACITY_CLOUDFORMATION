@@ -39,18 +39,14 @@ Resources:
     WebServerSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
-            GroupDescription: Allow http to client host and SSH to server
+            GroupDescription: Allow http to and from load balancer
             VpcId:
               Fn::ImportValue:
                 !Sub "${EnvironmentName}-VPCID"
             SecurityGroupIngress:
             - IpProtocol: tcp
-              FromPort: 8080
-              ToPort: 8080
-              CidrIp: 0.0.0.0/0
-            - IpProtocol: tcp
-              FromPort: 22
-              ToPort: 22
+              FromPort: 80
+              ToPort: 80
               CidrIp: 0.0.0.0/0
             SecurityGroupEgress:
             - IpProtocol: tcp
@@ -63,13 +59,14 @@ Resources:
         Properties:
           UserData:
             Fn::Base64: !Sub |
-              #!/bin/bash
-              apt update -y
-              apt install -y apache2
-              systemctl start apache2
-              systemctl enable apache2
-              wget -P ../../var/www/html https://udagram-udacity-project.s3-us-west-2.amazonaws.com/index.html
-          ImageId: ami-06d51e91cea0dac8d
+                #!/bin/bash
+                apt-get update -y
+                apt-get install unzip awscli -y
+                apt-get install apache2 -y
+                systemctl start apache2.service
+                cd /var/www/html
+                aws s3 cp s3://udagram-udacity-project/index.html /var/www/html
+          ImageId: ami-08edb3f0e9f3f2557
           IamInstanceProfile: !Ref ProfileWithRolesForOurApp
           SecurityGroups:
           - Ref: WebServerSecurityGroup
@@ -87,7 +84,7 @@ Resources:
                 !Sub "${EnvironmentName}-PRIV-NETS"
             LaunchConfigurationName:
               Ref: WebAppLaunchConfig
-            MinSize: "1"
+            MinSize: "2"
             MaxSize: "4"
             TargetGroupARNs:
             - Ref: WebAppTargetGroup
@@ -139,3 +136,10 @@ Resources:
             VpcId: 
                 Fn::ImportValue:
                     Fn::Sub: "${EnvironmentName}-VPCID"
+        
+Outputs:
+    WebAppLoadBalancerURL:
+        Description: Load Balancer URL
+        Value: !Join [ "", [ 'http://', !GetAtt WebAppLB.DNSName ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-LB-URL
